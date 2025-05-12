@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Check Lista Acustica</title>
+  <style>
+    body { font-family: Arial; padding: 20px; background: #f4f4f4; }
+    h2 { color: #007BFF; }
+    label { display: block; margin-top: 10px; }
+    input, textarea, select, button { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+    .dynamic-section { border: 1px solid #ccc; padding: 10px; margin-top: 20px; background: #fff; }
+    .dynamic-list { margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    .button-clear { background-color: red; color: white; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h2>Check Lista Acustica – Dati Generali</h2>
+  <form id="checklistForm">
+    <label>Committente / Azienda:</label>
+    <input type="text" id="azienda" required>
+    <label>Tipologia Attività (es. bar, ristorante, ecc):</label>
+    <input type="text" id="tipologia" required>
+    <label>Sede Legale:</label>
+    <input type="text" id="sede_legale">
+    <label>Sede Operativa:</label>
+    <input type="text" id="sede_operativa">
+    <label>Partita IVA:</label>
+    <input type="text" id="piva">
+    <label>Legale Rappresentante / Titolare:</label>
+    <input type="text" id="rappresentante">
+    <label>Email di contatto:</label>
+    <input type="email" id="email">
+    <label>Giorni di apertura:</label>
+    <input type="text" id="giorni_apertura">
+
+    <div class="dynamic-section">
+      <h3>Attrezzature</h3>
+      <div id="attrezzatureList" class="dynamic-list"></div>
+      <button type="button" onclick="aggiungiAttrezzatura()">+ Aggiungi Attrezzatura</button>
+    </div>
+
+    <div class="dynamic-section">
+      <h3>Misurazioni</h3>
+      <div id="misurazioniList" class="dynamic-list"></div>
+      <button type="button" onclick="aggiungiMisurazione()">+ Aggiungi Misurazione</button>
+    </div>
+
+    <button type="submit">Salva</button>
+  </form>
+
+  <button onclick="esportaCSV()">Esporta dati in CSV</button>
+  <button class="button-clear" onclick="clearStorage()">Cancella tutti i dati</button>
+
+  <script>
+    // Funzione per creare campi dinamici per le attrezzature
+    function creaCampoAttrezzatura(index) {
+      return `
+        <div style="margin-bottom:10px;">
+          <label>Attrezzatura ${index + 1} – Marca e Modello:</label>
+          <input type="text" name="attrezzatura_${index}" />
+        </div>`;
+    }
+
+    // Funzione per creare campi dinamici per le misurazioni
+    function creaCampoMisurazione(index) {
+      return `
+        <div style="margin-bottom:10px;">
+          <label>Tipo di Misura ${index + 1}:</label>
+          <input type="text" name="tipo_misura_${index}" />
+          <label>Valore misurato [dB]:</label>
+          <input type="number" name="valore_db_${index}" />
+        </div>`;
+    }
+
+    // Aggiunge un campo attrezzatura
+    function aggiungiAttrezzatura() {
+      const container = document.getElementById("attrezzatureList");
+      if (!container) {
+        console.error("Contenitore attrezzature non trovato!");
+        return;
+      }
+      const index = container.children.length;
+      console.log("Aggiungo attrezzatura all'indice:", index);
+      container.insertAdjacentHTML('beforeend', creaCampoAttrezzatura(index));
+    }
+
+    // Aggiunge un campo misurazione
+    function aggiungiMisurazione() {
+      const container = document.getElementById("misurazioniList");
+      if (!container) {
+        console.error("Contenitore misurazioni non trovato!");
+        return;
+      }
+      const index = container.children.length;
+      console.log("Aggiungo misurazione all'indice:", index);
+      container.insertAdjacentHTML('beforeend', creaCampoMisurazione(index));
+    }
+
+    // Raccoglie i valori del form
+    function getInputValues() {
+      const attrezzature = Array.from(document.querySelectorAll('[name^="attrezzatura_"]')).map(el => el.value);
+      const misurazioni = Array.from(document.querySelectorAll('[name^="tipo_misura_"]')).map((el, i) => ({
+        tipo: el.value,
+        valore: document.querySelectorAll('[name^="valore_db_"]')[i].value
+      }));
+
+      return {
+        azienda: document.getElementById('azienda').value,
+        tipologia: document.getElementById('tipologia').value,
+        sede_legale: document.getElementById('sede_legale').value,
+        sede_operativa: document.getElementById('sede_operativa').value,
+        piva: document.getElementById('piva').value,
+        rappresentante: document.getElementById('rappresentante').value,
+        email: document.getElementById('email').value,
+        giorni_apertura: document.getElementById('giorni_apertura').value,
+        attrezzature,
+        misurazioni
+      };
+    }
+
+    // Salva i dati nel localStorage
+    document.getElementById("checklistForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const dati = getInputValues();
+      console.log("Dati raccolti dal form:", dati);
+      let archiviati = JSON.parse(localStorage.getItem('checklistAcustica')) || [];
+      archiviati.push(dati);
+      console.log("Salvo i seguenti dati in localStorage:", archiviati);
+      localStorage.setItem('checklistAcustica', JSON.stringify(archiviati));
+      alert("Dati salvati!");
+      this.reset();
+      document.getElementById("attrezzatureList").innerHTML = "";
+      document.getElementById("misurazioniList").innerHTML = "";
+    });
+
+    // Esporta i dati in un file CSV
+    function esportaCSV() {
+      const dati = JSON.parse(localStorage.getItem('checklistAcustica')) || [];
+      if (!dati.length) {
+        alert("Nessun dato da esportare.");
+        return;
+      }
+
+      let righe = ["Azienda,Tipologia,Sede Legale,Sede Operativa,PIVA,Rappresentante,Email,Giorni Apertura,Attrezzature,Misure"];
+      dati.forEach(d => {
+        const att = d.attrezzature.join(" / ");
+        const mis = d.misurazioni.map(m => m.tipo + ": " + m.valore + " dB").join(" | ");
+        righe.push(`${d.azienda},${d.tipologia},${d.sede_legale},${d.sede_operativa},${d.piva},${d.rappresentante},${d.email},${d.giorni_apertura},${att},${mis}`);
+      });
+
+      const blob = new Blob([righe.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "checklist_acustica.csv";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Cancella tutti i dati dal localStorage
+    function clearStorage() {
+      localStorage.removeItem('checklistAcustica');
+      alert("Archivio eliminato.");
+    }
+  </script>
+</body>
+</html>
