@@ -33,6 +33,7 @@
       background-color: #ddd;
     }
     .button-clear { background-color: red; color: white; margin-top: 20px; }
+    button.action-btn { width: auto; padding: 4px 8px; }
   </style>
 </head>
 <body>
@@ -91,6 +92,7 @@
 
   <button onclick="esportaCSV()">Esporta dati in CSV</button>
   <button class="button-clear" onclick="clearStorage()">Cancella tutti i dati</button>
+  <button onclick="debugLocalStorage()">Debug localStorage</button>
 
   <script>
     // Funzione per creare campi dinamici per le attrezzature
@@ -159,40 +161,86 @@
       };
     }
 
-    // Carica i dati salvati nella tabella
+    // Funzione di debug per verificare il localStorage
+    function debugLocalStorage() {
+      const dati = JSON.parse(localStorage.getItem('checklistAcustica')) || [];
+      console.table(dati);
+      alert(`Dati nel localStorage: ${dati.length} record trovati`);
+    }
+
+    // Carica i dati salvati nella tabella - MIGLIORATA
     function caricaDatiSalvati() {
       const datiSalvatiBody = document.getElementById('datiSalvatiBody');
-      if (!datiSalvatiBody) return;
+      if (!datiSalvatiBody) {
+        console.error("Elemento datiSalvatiBody non trovato!");
+        return;
+      }
       
-      const dati = JSON.parse(localStorage.getItem('checklistAcustica')) || [];
-      console.log("Dati caricati dal localStorage:", dati);
+      console.log("Inizio caricamento dati nella tabella");
       
-      datiSalvatiBody.innerHTML = '';
+      // Recupera i dati dal localStorage
+      let dati;
+      try {
+        dati = JSON.parse(localStorage.getItem('checklistAcustica'));
+        console.log("Dati caricati dal localStorage:", dati);
+      } catch (e) {
+        console.error("Errore nel parsing dei dati:", e);
+        dati = [];
+      }
       
-      if (dati.length === 0) {
+      // Se non ci sono dati o dati è null
+      if (!dati || dati.length === 0) {
+        console.log("Nessun dato trovato nel localStorage");
         datiSalvatiBody.innerHTML = '<tr><td colspan="6">Nessun dato salvato</td></tr>';
         return;
       }
       
+      // Pulisce la tabella prima di aggiungere nuove righe
+      datiSalvatiBody.innerHTML = '';
+      
+      // Aggiunge le righe alla tabella
       dati.forEach((item, index) => {
+        if (!item) {
+          console.warn(`Item all'indice ${index} è undefined o null`);
+          return;
+        }
+        
         const row = document.createElement('tr');
         
-        const attString = item.attrezzature.join(", ");
-        const misString = item.misurazioni.map(m => `${m.tipo}: ${m.valore} dB`).join(", ");
+        // Gestione sicura dei dati
+        const azienda = item.azienda || 'N/D';
+        const tipologia = item.tipologia || 'N/D';
+        const sedeOperativa = item.sede_operativa || 'N/D';
+        
+        let attString = 'Nessuna';
+        if (item.attrezzature && item.attrezzature.length) {
+          attString = item.attrezzature.filter(a => a).join(", ") || 'Nessuna';
+        }
+        
+        let misString = 'Nessuna';
+        if (item.misurazioni && item.misurazioni.length) {
+          misString = item.misurazioni
+            .filter(m => m && m.tipo)
+            .map(m => `${m.tipo}: ${m.valore || 'N/D'} dB`)
+            .join(", ") || 'Nessuna';
+        }
         
         row.innerHTML = `
-          <td>${item.azienda}</td>
-          <td>${item.tipologia}</td>
-          <td>${item.sede_operativa}</td>
+          <td>${azienda}</td>
+          <td>${tipologia}</td>
+          <td>${sedeOperativa}</td>
           <td>${attString}</td>
           <td>${misString}</td>
           <td>
-            <button onclick="eliminaVoce(${index})">Elimina</button>
+            <button class="action-btn" onclick="eliminaVoce(${index})">Elimina</button>
           </td>
         `;
         
         datiSalvatiBody.appendChild(row);
+        console.log(`Riga ${index} aggiunta alla tabella`);
       });
+      
+      console.log("Caricamento dati completato");
     }
 
     // Funzione per eliminare una singola voce
@@ -210,15 +258,36 @@
       e.preventDefault();
       const dati = getInputValues();
       console.log("Dati raccolti dal form:", dati);
-      let archiviati = JSON.parse(localStorage.getItem('checklistAcustica')) || [];
+      
+      // Recupera i dati esistenti
+      let archiviati;
+      try {
+        archiviati = JSON.parse(localStorage.getItem('checklistAcustica')) || [];
+      } catch (e) {
+        console.error("Errore nel recuperare i dati esistenti:", e);
+        archiviati = [];
+      }
+      
+      // Aggiungi i nuovi dati
       archiviati.push(dati);
-      console.log("Salvo i seguenti dati in localStorage:", archiviati);
-      localStorage.setItem('checklistAcustica', JSON.stringify(archiviati));
+      
+      // Salva nel localStorage
+      try {
+        localStorage.setItem('checklistAcustica', JSON.stringify(archiviati));
+        console.log("Dati salvati con successo:", archiviati);
+      } catch (e) {
+        console.error("Errore nel salvare i dati:", e);
+        alert("Errore nel salvare i dati: " + e.message);
+        return;
+      }
+      
       alert("Dati salvati!");
       this.reset();
       document.getElementById("attrezzatureList").innerHTML = "";
       document.getElementById("misurazioniList").innerHTML = "";
-      caricaDatiSalvati(); // Aggiornare la tabella dopo il salvataggio
+      
+      // Aggiorna la tabella
+      caricaDatiSalvati();
     });
 
     // Esporta i dati in un file CSV
@@ -231,9 +300,13 @@
 
       let righe = ["Azienda,Tipologia,Sede Legale,Sede Operativa,PIVA,Rappresentante,Email,Giorni Apertura,Attrezzature,Misure"];
       dati.forEach(d => {
-        const att = d.attrezzature.join(" / ");
-        const mis = d.misurazioni.map(m => m.tipo + ": " + m.valore + " dB").join(" | ");
-        righe.push(`${d.azienda},${d.tipologia},${d.sede_legale},${d.sede_operativa},${d.piva},${d.rappresentante},${d.email},${d.giorni_apertura},${att},${mis}`);
+        if (!d) return;
+        
+        const att = d.attrezzature && d.attrezzature.length ? d.attrezzature.join(" / ") : "";
+        const mis = d.misurazioni && d.misurazioni.length ? 
+          d.misurazioni.map(m => (m && m.tipo) ? m.tipo + ": " + (m.valore || "N/D") + " dB" : "").join(" | ") : "";
+        
+        righe.push(`${d.azienda || ""},${d.tipologia || ""},${d.sede_legale || ""},${d.sede_operativa || ""},${d.piva || ""},${d.rappresentante || ""},${d.email || ""},${d.giorni_apertura || ""},${att},${mis}`);
       });
 
       const blob = new Blob([righe.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -253,7 +326,15 @@
     }
 
     // Carica i dati all'avvio della pagina
-    document.addEventListener('DOMContentLoaded', caricaDatiSalvati);
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log("DOM caricato, inizializzazione applicazione");
+      // Aggiungi almeno un campo per attrezzatura e misurazione all'avvio
+      aggiungiAttrezzatura();
+      aggiungiMisurazione();
+      // Carica i dati nella tabella
+      caricaDatiSalvati();
+    });
   </script>
 </body>
 </html>
+
